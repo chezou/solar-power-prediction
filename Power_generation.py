@@ -76,12 +76,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import numpy as np
 
-def rmse(actual, predicted):
-    from sklearn.metrics import mean_squared_error
-    from math import sqrt
-    
-    return sqrt(mean_squared_error(actual, predicted))
-
+from power_predictor import rmse
 
 def evaluate_by_loo(energies_train, energies_target, regr=LinearRegression()):
 

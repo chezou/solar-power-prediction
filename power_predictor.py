@@ -1,6 +1,12 @@
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import DictVectorizer
 
+def rmse(actual, predicted):
+    from sklearn.metrics import mean_squared_error
+    from math import sqrt
+    
+    return sqrt(mean_squared_error(actual, predicted))
+
 def train_model(_regr, train_dict, target):
   estimators = [('vectorizer', DictVectorizer(sparse=False)), ('regr', _regr)]
   _pl = Pipeline(estimators)
@@ -20,5 +26,6 @@ def prepare_data(raw_df, predictor_columns=DEFAULT_COLUMNS):
   return predictors, target
 
 def predict_power_generation(_regr, input_df, predictor_columns=DEFAULT_COLUMNS):
-  input_dict = prepare_data(input_df, predictor_columns).to_dict(orient='record')
+  _predictors, _target = prepare_data(input_df, predictor_columns)
+  input_dict = _predictors.to_dict(orient='record')
   return _regr.predict(input_dict)
