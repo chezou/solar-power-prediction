@@ -57,15 +57,8 @@ df2.describe()
 dev_data = df2[0:20]
 test_data = df2[20:]
 
-DEFAULT_COLUMNS = ['temperature', 'rain_mm', 'humidity_mbar', 'wind_power',
-                   'day_length_sec', 'condition']
-
-def prepare_data(raw_df, predictor_columns=DEFAULT_COLUMNS):
-  predictors = raw_df[predictor_columns]
-  targets = raw_df.energy
-
-  return predictors, targets
-  
+from power_predictor import DEFAULT_COLUMNS
+from power_predictor import prepare_data
 
 energies_train, energies_target = prepare_data(dev_data)
 
@@ -197,7 +190,7 @@ min_rmse = 10000000000
 best_model_test_rmse = 10000000000
 best_model = None
 
-for _regr in [LinearRegression(), ElasticNetCV(), RidgeCV(), LassoCV()]:
+for _regr in [LinearRegression(), ElasticNetCV(cv=4), RidgeCV(cv=4), LassoCV(cv=4)]:
   print(type(_regr).__name__)
   _model, _rmse, _test_rmse = train_and_predict(_regr, energies_cat_train, energies_target, energies_cat_test, energies_test_target)
   if min_rmse > _rmse:
@@ -207,23 +200,3 @@ for _regr in [LinearRegression(), ElasticNetCV(), RidgeCV(), LassoCV()]:
 
 print("Best model: {}\tMin Dev RMSE: {}\tTest RMSE: {}".format(type(best_model).__name__,
                                                               min_rmse, best_model_test_rmse))
-
-# ## Predict with filter columns: 'temperature' and 'condition'
-
-target_columns = ['temperature', 'condition']
-energies_train, energies_target = prepare_data(dev_data, predictor_columns=target_columns)
-energies_test, energies_test_target = prepare_data(test_data, predictor_columns=target_columns)
-
-
-from sklearn.pipeline import Pipeline
-for _regr in [LinearRegression(), ElasticNetCV(), RidgeCV(), LassoCV()]:
-  estimators = [('vectorizer', DictVectorizer(sparse=False)), ('regr', _regr)]
-  pl = Pipeline(estimators)
-  train_cat = energies_train.to_dict(orient='record')
-  pl.fit(train_cat, energies_target)
-  pred = pl.predict(train_cat)
-  dev_rmse = rmse(energies_target.values, pred)
-  pred_test = pl.predict(energies_test.to_dict(orient='record'))
-  test_rmse = rmse(energies_test_target.values, pred_test)
-  print(type(pl.named_steps['regr']).__name__, dev_rmse, test_rmse)
-
