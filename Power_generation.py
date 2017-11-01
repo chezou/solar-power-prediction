@@ -54,13 +54,13 @@ df2.describe()
 # Split development data and test data
 # Training data is the range of the first data
 
-dev_data = df2[0:17]
-test_data = df2[17:]
+dev_data = df2[0:20]
+test_data = df2[20:]
 
-def prepare_data(raw_df):
-  # Filter columns for predictor
-  predictor_columns = ['temperature', 'rain_mm', 'humidity_mbar', 'wind_power', 'day_length_sec', 'condition']
+DEFAULT_COLUMNS = ['temperature', 'rain_mm', 'humidity_mbar', 'wind_power',
+                   'day_length_sec', 'condition']
 
+def prepare_data(raw_df, predictor_columns=DEFAULT_COLUMNS):
   predictors = raw_df[predictor_columns]
   targets = raw_df.energy
 
@@ -163,24 +163,67 @@ def plot_predict_actual(actual, predicted):
 plot_predict_actual(actual_powers, predicted_powers)
 
 
-# Create model with whole data
-regr = LinearRegression()
-regr.fit(energies_cat_train, energies_target)
+# Create model with dev data
+
+def train_and_predict(regr, cat_train, target, cat_test, test_target):
+  regr.fit(cat_train, target)
+
+  pred_train = regr.predict(cat_train)
+  pred = regr.predict(cat_test)
+
+  dev_rmse = rmse(target.values, pred_train)
+  test_rmse = rmse(test_target.values, pred)
+  print("Dev RMSE: {}\tDev R2 score: {}".format(dev_rmse,
+                                                r2_score(target.values, pred_train)))
+  print("Test RMSE: {}\tTest R2 score: {}".format(test_rmse,
+                                                  r2_score(test_target.values, pred)))
+  print('Coefficients: \n', regr.coef_)
+  #print(test.columns)
+  print('Intercepts: \n', regr.intercept_ )
+  
+  #plot_predict_actual(test_target, pred)
+
+  
+  return regr, dev_rmse, test_rmse
+
+from sklearn.linear_model import ElasticNetCV
+from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import LassoCV
 
 energies_test, energies_test_target = prepare_data(test_data)
 energies_cat_test = vectorizer.transform(energies_test.to_dict(orient='record'))
 
-energies_pred = regr.predict(energies_cat_test)
+min_rmse = 10000000000
+best_model_test_rmse = 10000000000
+best_model = None
+
+for _regr in [LinearRegression(), ElasticNetCV(), RidgeCV(), LassoCV()]:
+  print(type(_regr).__name__)
+  _model, _rmse, _test_rmse = train_and_predict(_regr, energies_cat_train, energies_target, energies_cat_test, energies_test_target)
+  if min_rmse > _rmse:
+    best_model = _model
+    min_rmse = _rmse
+    best_model_test_rmse = _test_rmse
+
+print("Best model: {}\tMin Dev RMSE: {}\tTest RMSE: {}".format(type(best_model).__name__,
+                                                              min_rmse, best_model_test_rmse))
+
+# ## Predict with filter columns: 'temperature' and 'condition'
+
+target_columns = ['temperature', 'condition']
+energies_train, energies_target = prepare_data(dev_data, predictor_columns=target_columns)
+energies_test, energies_test_target = prepare_data(test_data, predictor_columns=target_columns)
 
 
-print("RMSE: {}\tR2 score: {}".format(rmse(energies_test_target.values, energies_pred), r2_score(energies_test_target.values, energies_pred)))
+from sklearn.pipeline import Pipeline
+for _regr in [LinearRegression(), ElasticNetCV(), RidgeCV(), LassoCV()]:
+  estimators = [('vectorizer', DictVectorizer(sparse=False)), ('regr', _regr)]
+  pl = Pipeline(estimators)
+  train_cat = energies_train.to_dict(orient='record')
+  pl.fit(train_cat, energies_target)
+  pred = pl.predict(train_cat)
+  dev_rmse = rmse(energies_target.values, pred)
+  pred_test = pl.predict(energies_test.to_dict(orient='record'))
+  test_rmse = rmse(energies_test_target.values, pred_test)
+  print(type(pl.named_steps['regr']).__name__, dev_rmse, test_rmse)
 
-
-print('Coefficients: \n', regr.coef_)
-print(energies_test.columns)
-print('Intercepts: \n', regr.intercept_ )
-
-
-# We got following formula by linear regression
-# 
-# $Power\_generation = 608.2 * temperature -5.19 * rain[mm] -301.7 * humidity[mbar] - 344.3 * wind\_power + 2.759 * day\_length[sec] -4802 * condition +  -72793.9$
